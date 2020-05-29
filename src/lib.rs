@@ -2,8 +2,9 @@
 // #![forbid(warnings)]
 
 use std::fs::{self, File};
-use std::io::{copy, BufReader};
+use std::io::{copy, BufReader, Write};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, Result};
 use atom_syndication::{Entry, Feed};
@@ -40,7 +41,35 @@ pub struct Args {
     pub outdir: PathBuf,
 }
 
-fn download_and_save_image(path: &PathBuf, url: &str) -> Result<()> {
+fn pandoc_html_to_md(input: &str) -> Result<String> {
+    dbg!(&input);
+    let mut child = Command::new("pandoc")
+        .arg("--from=html")
+        .arg("--to=markdown_strict")
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    child
+        .stdin
+        .as_mut()
+        .ok_or(anyhow!("Child process stdin has not been captured."))?
+        .write_all(input.as_bytes())?;
+
+    let output = child.wait_with_output()?;
+
+    if output.status.success() {
+        let raw_output = String::from_utf8(output.stdout)?;
+        dbg!(&raw_output);
+        Ok(raw_output)
+    } else {
+        let err = String::from_utf8(output.stderr)?;
+        Err(anyhow!("External command failed:\n {}", err)).into()
+    }
+}
+
+fn download_and_save_image(path: &PathBuf, url: &str) -> Result<PathBuf> {
     info!("Downloading: {}", url);
 
     // Don't follow redirects since for old posts, most likely the image is
@@ -50,36 +79,33 @@ fn download_and_save_image(path: &PathBuf, url: &str) -> Result<()> {
     match r.status() {
         200..=299 => {
             match r.header("Content-Type") {
-                // Allow one level of search for deeper image links. This is common on
-                // blogspot.
-                Some(s) if s.starts_with("text") => {
-                    let content = r.into_string()?;
-                    if let Some(deep_url) = Document::from(content.as_str())
-                        .find(Name("img"))
-                        .filter_map(|n| n.attr("src"))
-                        .next()
-                    {
-                        download_and_save_image(path, deep_url)
-                    } else {
-                        Err(DownloadError::TEXT.into())
-                    }
-                }
+                // Some(s) if s.starts_with("text") => {
+                //     let content = r.into_string()?;
+                //     if let Some(deep_url) = Document::from(content.as_str())
+                //         .find(Name("img"))
+                //         .filter_map(|n| n.attr("src"))
+                //         .next()
+                //     {
+                //         download_and_save_image(path, deep_url)
+                //     } else {
+                //         Err(DownloadError::TEXT.into())
+                //     }
+                // }
                 Some(s) if s.starts_with("image") => {
-                    let mut dest = {
-                        let filename = r
-                            .get_url()
-                            .rsplit('/')
-                            .next()
-                            .expect("No slash (/) in url.")
-                            .to_lowercase();
+                    let filename = r
+                        .get_url()
+                        .rsplit('/')
+                        .next()
+                        .expect("No slash (/) in url.")
+                        .to_lowercase();
 
-                        let filename = path.join(filename);
-                        File::create(filename)?
-                    };
+                    let filename = path.join(filename);
+                    let mut dest = File::create(&filename)?;
+
                     let mut reader = r.into_reader();
 
                     copy(&mut reader, &mut dest)?;
-                    Ok(())
+                    Ok(filename)
                 }
                 _ => Err(DownloadError::TEXT.into()),
             }
@@ -107,6 +133,8 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
         None => return Err(anyhow!("No post content.")),
     };
 
+    let mut markdown_content = pandoc_html_to_md(html_content.as_str())?;
+
     // Download all the IMGs
     for url in Document::from(html_content.as_str())
         .find(Name("img"))
@@ -114,9 +142,13 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
     {
         match download_and_save_image(&path, &url) {
             Err(e) => warn!("{}", e),
-            _ => continue,
+            Ok(p) => {
+                // Rewrite the paths in the HTML
+                markdown_content = markdown_content.as_str().replace(url, p.to_str().unwrap());
+            }
         }
     }
+    info!("{}", markdown_content);
 
     // Convert the HTML to Markdown
 
