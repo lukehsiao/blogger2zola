@@ -44,7 +44,7 @@ pub struct Args {
 fn pandoc_html_to_md(input: &str) -> Result<String> {
     let mut child = Command::new("pandoc")
         .arg("--from=html")
-        .arg("--to=markdown_strict")
+        .arg("--to=gfm")
         .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
