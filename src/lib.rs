@@ -16,12 +16,12 @@ use structopt::StructOpt;
 )]
 pub struct Args {
     /// The location of the Blogger XML file.
-    #[structopt(short, long, parse(from_os_str))]
+    #[structopt(parse(from_os_str))]
     pub xml: PathBuf,
 
     /// The directory to save the Markdown files and images.
-    #[structopt(short, long, parse(from_os_str), default_value = "out")]
-    pub subdomain: PathBuf,
+    #[structopt(parse(from_os_str))]
+    pub outdir: PathBuf,
 }
 
 pub fn run(args: Args) -> Result<()> {
