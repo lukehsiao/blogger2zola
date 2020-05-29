@@ -20,7 +20,7 @@ pub enum DownloadError {
     #[error("Error {status}: Image path is redirected.")]
     REDIRECT { status: u16 },
     #[error("Error: This URL does not point to an image.")]
-    TEXT,
+    NONIMAGE,
     #[error("Error {status}: Unable to download image.")]
     UNKNOWN { status: u16 },
 }
@@ -42,7 +42,6 @@ pub struct Args {
 }
 
 fn pandoc_html_to_md(input: &str) -> Result<String> {
-    dbg!(&input);
     let mut child = Command::new("pandoc")
         .arg("--from=html")
         .arg("--to=markdown_strict")
@@ -61,7 +60,6 @@ fn pandoc_html_to_md(input: &str) -> Result<String> {
 
     if output.status.success() {
         let raw_output = String::from_utf8(output.stdout)?;
-        dbg!(&raw_output);
         Ok(raw_output)
     } else {
         let err = String::from_utf8(output.stderr)?;
@@ -77,47 +75,31 @@ fn download_and_save_image(path: &PathBuf, url: &str) -> Result<PathBuf> {
     let r = ureq::get(url).redirects(0).timeout_connect(1_000).call();
 
     match r.status() {
-        200..=299 => {
-            match r.header("Content-Type") {
-                // Some(s) if s.starts_with("text") => {
-                //     let content = r.into_string()?;
-                //     if let Some(deep_url) = Document::from(content.as_str())
-                //         .find(Name("img"))
-                //         .filter_map(|n| n.attr("src"))
-                //         .next()
-                //     {
-                //         download_and_save_image(path, deep_url)
-                //     } else {
-                //         Err(DownloadError::TEXT.into())
-                //     }
-                // }
-                Some(s) if s.starts_with("image") => {
-                    let filename = r
-                        .get_url()
-                        .rsplit('/')
-                        .next()
-                        .expect("No slash (/) in url.")
-                        .to_lowercase();
+        200..=299 => match r.header("Content-Type") {
+            Some(s) if s.starts_with("image") => {
+                let filename = r
+                    .get_url()
+                    .rsplit('/')
+                    .next()
+                    .expect("No slash (/) in url.")
+                    .to_lowercase();
 
-                    let filename = path.join(filename);
-                    let mut dest = File::create(&filename)?;
+                let filename = path.join(filename);
+                let mut dest = File::create(&filename)?;
 
-                    let mut reader = r.into_reader();
+                let mut reader = r.into_reader();
 
-                    copy(&mut reader, &mut dest)?;
-                    Ok(filename)
-                }
-                _ => Err(DownloadError::TEXT.into()),
+                copy(&mut reader, &mut dest)?;
+                Ok(filename)
             }
-        }
+            _ => Err(DownloadError::NONIMAGE.into()),
+        },
         r if r >= 300 && r <= 399 => Err(DownloadError::REDIRECT { status: r }.into()),
         s => Err(DownloadError::UNKNOWN { status: s }.into()),
     }
 }
 
 fn process_post(args: &Args, entry: Entry) -> Result<()> {
-    // dbg!(entry);
-
     info!("Processing {}...\n", entry.title);
 
     let slug = slug::slugify(entry.title);
