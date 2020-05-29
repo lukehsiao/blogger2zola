@@ -117,6 +117,7 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
     info!("Processing {}...\n", entry.title);
 
     let slug = slug::slugify(&entry.title);
+    let slug = format!("{}_{}", entry.updated().format("%F"), slug);
 
     let path: PathBuf = [args.outdir.clone(), PathBuf::from(slug)].iter().collect();
 
@@ -201,6 +202,7 @@ pub fn run(args: Args) -> Result<()> {
                 _ => false,
             })
             .is_some()
+            && !entry.title().is_empty()
         {
             process_post(&args, entry)?;
         }
