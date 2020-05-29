@@ -116,7 +116,7 @@ fn download_and_save_image(path: &PathBuf, url: &str) -> Result<PathBuf> {
 fn process_post(args: &Args, entry: Entry) -> Result<()> {
     info!("Processing {}...\n", entry.title);
 
-    let slug = slug::slugify(entry.title);
+    let slug = slug::slugify(&entry.title);
 
     let path: PathBuf = [args.outdir.clone(), PathBuf::from(slug)].iter().collect();
 
@@ -124,8 +124,8 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
         warn!("Directory exists: {}", e);
     }
 
-    let html_content = match entry.content {
-        Some(c) => c.value.unwrap(),
+    let html_content = match &entry.content {
+        Some(c) => c.value().unwrap().to_string(),
         None => return Err(anyhow!("No post content.")),
     };
 
@@ -153,11 +153,25 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
             _ => continue,
         }
     }
-    info!("{}", markdown_content);
-
-    // Convert the HTML to Markdown
 
     // Write the file with TOML frontmatter
+    // TODO: Totally ignoring tags/categories for now.
+    let result = format!(
+        r#"+++
+title= "{}"
+date = {}
+
+[extra]
+author = "{}"
++++
+
+{}"#,
+        entry.title(),
+        entry.updated().to_rfc3339(),
+        entry.authors()[0].name(),
+        markdown_content
+    );
+    fs::write(path.join("index.md"), result)?;
 
     Ok(())
 }
