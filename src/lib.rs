@@ -92,6 +92,20 @@ fn download_and_save_image(path: &PathBuf, url: &str) -> Result<PathBuf> {
                 copy(&mut reader, &mut dest)?;
                 Ok(filename)
             }
+            // Allow one level of search for deeper image links. This is common on
+            // blogspot.
+            Some(s) if s.starts_with("text") => {
+                let content = r.into_string()?;
+                if let Some(deep_url) = Document::from(content.as_str())
+                    .find(Name("img"))
+                    .filter_map(|n| n.attr("src"))
+                    .next()
+                {
+                    download_and_save_image(path, deep_url)
+                } else {
+                    Err(DownloadError::NONIMAGE.into())
+                }
+            }
             _ => Err(DownloadError::NONIMAGE.into()),
         },
         r if r >= 300 && r <= 399 => Err(DownloadError::REDIRECT { status: r }.into()),
