@@ -77,20 +77,20 @@ fn download_and_save_image(path: &PathBuf, url: &str) -> Result<PathBuf> {
     match r.status() {
         200..=299 => match r.header("Content-Type") {
             Some(s) if s.starts_with("image") => {
-                let filename = r
+                let img_path = r
                     .get_url()
                     .rsplit('/')
                     .next()
                     .expect("No slash (/) in url.")
                     .to_lowercase();
 
-                let filename = path.join(filename);
+                let filename = path.join(&img_path);
                 let mut dest = File::create(&filename)?;
 
                 let mut reader = r.into_reader();
 
                 copy(&mut reader, &mut dest)?;
-                Ok(filename)
+                Ok(PathBuf::from(img_path))
             }
             // Allow one level of search for deeper image links. This is common on
             // blogspot.
