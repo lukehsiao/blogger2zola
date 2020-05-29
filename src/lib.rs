@@ -132,16 +132,25 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
     let mut markdown_content = pandoc_html_to_md(html_content.as_str())?;
 
     // Download all the IMGs
-    for url in Document::from(html_content.as_str())
-        .find(Name("img"))
-        .filter_map(|n| n.parent().expect("img w/o href").attr("href"))
-    {
-        match download_and_save_image(&path, &url) {
-            Err(e) => warn!("{}", e),
-            Ok(p) => {
-                // Rewrite the paths in the HTML
-                markdown_content = markdown_content.as_str().replace(url, p.to_str().unwrap());
+    for node in Document::from(html_content.as_str()).find(Name("img")) {
+        match (
+            node.attr("src"),
+            node.parent().expect("img w/o href").attr("href"),
+        ) {
+            (Some(thumb), Some(orig)) => {
+                match download_and_save_image(&path, &orig) {
+                    Err(e) => warn!("{}", e),
+                    Ok(p) => {
+                        // Rewrite the paths in the HTML
+                        markdown_content = markdown_content
+                            .as_str()
+                            .replace(thumb, p.to_str().unwrap());
+                        markdown_content =
+                            markdown_content.as_str().replace(orig, p.to_str().unwrap());
+                    }
+                }
             }
+            _ => continue,
         }
     }
     info!("{}", markdown_content);
