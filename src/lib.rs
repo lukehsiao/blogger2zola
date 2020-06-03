@@ -161,6 +161,7 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
         r#"+++
 title= "{}"
 date = {}
+draft = True
 
 [extra]
 author = "{}"
