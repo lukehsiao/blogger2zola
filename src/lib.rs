@@ -119,7 +119,7 @@ fn process_post(args: &Args, entry: Entry) -> Result<()> {
     let slug = slug::slugify(&entry.title);
     let slug = format!("{}_{}", entry.updated().format("%F"), slug);
 
-    let path: PathBuf = [args.outdir.clone(), PathBuf::from(slug)].iter().collect();
+    let path: PathBuf = [&args.outdir, &PathBuf::from(slug)].iter().collect();
 
     if let Err(e) = fs::create_dir(&path) {
         warn!("Directory exists: {}", e);
