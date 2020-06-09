@@ -53,7 +53,7 @@ fn pandoc_html_to_md(input: &str) -> Result<String> {
     child
         .stdin
         .as_mut()
-        .ok_or(anyhow!("Child process stdin has not been captured."))?
+        .ok_or_else(|| anyhow!("Child process stdin has not been captured."))?
         .write_all(input.as_bytes())?;
 
     let output = child.wait_with_output()?;
@@ -63,7 +63,7 @@ fn pandoc_html_to_md(input: &str) -> Result<String> {
         Ok(raw_output)
     } else {
         let err = String::from_utf8(output.stderr)?;
-        Err(anyhow!("External command failed:\n {}", err)).into()
+        Err(anyhow!("External command failed:\n {}", err))
     }
 }
 
@@ -198,11 +198,10 @@ pub fn run(args: Args) -> Result<()> {
         if entry
             .categories
             .iter()
-            .find(|c| match (c.scheme(), c.term()) {
+            .any(|c| match (c.scheme(), c.term()) {
                 (Some(s), t) if s == scheme && t == term => true,
                 _ => false,
             })
-            .is_some()
             && !entry.title().is_empty()
         {
             process_post(&args, entry)?;
